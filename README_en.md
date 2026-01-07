@@ -2,6 +2,11 @@
 
 > **big_work**
 
+---
+
+## 🌐 Languages / 语言
+- [chinese version](README.md)
+
 ## Introduction
 
 This project is a comprehensive engineering practice integrating various front-end and back-end technologies, mainly used for software engineering course projects. The project adopts mainstream technology stacks, aiming to improve team members' software development skills and project collaboration experience.
