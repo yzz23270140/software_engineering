@@ -13,6 +13,8 @@
         <h3>新增辅导员</h3>
         <button class="ghost" @click="resetForm">清空未创建</button>
       </div>
+      <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="success" class="success">{{ success }}</div>
       <div class="form-grid">
         <label class="field">
           <span>辅导员 ID</span>
@@ -39,6 +41,24 @@
         <h3>辅导员列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>ID</span>
+          <input v-model="listFilters.id" placeholder="辅导员ID" />
+        </label>
+        <label class="field">
+          <span>姓名</span>
+          <input v-model="listFilters.name" placeholder="姓名" />
+        </label>
+        <label class="field">
+          <span>学院</span>
+          <select v-model="listFilters.college">
+            <option value="">全部</option>
+            <option value="计算机学院">计算机学院</option>
+            <option value="卓越学院">卓越学院</option>
+          </select>
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -49,7 +69,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.ins_id">
+          <tr v-for="item in filteredItems" :key="item.ins_id">
             <td>{{ item.ins_id }}</td>
             <td>{{ item.ins_name }}</td>
             <td>{{ item.ins_college }}</td>
@@ -64,15 +84,29 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import api from '../api';
 
 const items = ref([]);
+const error = ref('');
+const success = ref('');
+const listFilters = ref({
+  id: '',
+  name: '',
+  college: ''
+});
 const form = ref({
   ins_id: '',
   ins_name: '',
   ins_college: ''
 });
+
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (listFilters.value.id && row.ins_id !== listFilters.value.id) return false;
+  if (listFilters.value.name && !row.ins_name.includes(listFilters.value.name)) return false;
+  if (listFilters.value.college && row.ins_college !== listFilters.value.college) return false;
+  return true;
+}));
 
 const load = async () => {
   const { data } = await api.get('/instructors');
@@ -80,8 +114,28 @@ const load = async () => {
 };
 
 const createItem = async () => {
-  await api.post('/instructors', form.value);
-  await load();
+  error.value = '';
+  success.value = '';
+  const insId = String(form.value.ins_id || '').trim();
+  if (!insId) {
+    error.value = '辅导员ID不能为空';
+    return;
+  }
+  if (!/^I\d{6}$/.test(insId)) {
+    error.value = '辅导员ID格式错误，应为I开头+6位数字';
+    return;
+  }
+  try {
+    const { data } = await api.post('/instructors', form.value);
+    if (!data.success) {
+      error.value = data.message || '创建失败';
+      return;
+    }
+    await load();
+    success.value = '创建成功';
+  } catch (err) {
+    error.value = '创建失败，请稍后重试。';
+  }
 };
 
 const resetForm = () => {
@@ -90,14 +144,26 @@ const resetForm = () => {
     ins_name: '',
     ins_college: ''
   };
+  error.value = '';
+  success.value = '';
 };
 
 const removeItem = async (id) => {
   if (!confirm('确认删除该辅导员吗？该辅导员名下学生会被一起删除。')) {
     return;
   }
-  await api.delete(`/instructors/${id}`);
-  await load();
+  error.value = '';
+  success.value = '';
+  try {
+    const { data } = await api.delete(`/instructors/${id}`);
+    if (!data.success) {
+      error.value = data.message || '删除失败';
+      return;
+    }
+    await load();
+  } catch (err) {
+    error.value = '删除失败，请稍后重试。';
+  }
 };
 
 onMounted(load);
@@ -160,6 +226,16 @@ onMounted(load);
   gap: 6px;
   font-size: 13px;
   color: #1f2937;
+}
+.error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.success {
+  color: #16a34a;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 input {
   padding: 8px 10px;

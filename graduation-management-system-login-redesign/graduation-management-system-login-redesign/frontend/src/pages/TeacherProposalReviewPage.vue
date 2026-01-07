@@ -15,12 +15,22 @@
       </div>
       <div class="form-grid">
         <label class="field">
-          <span>课题 ID</span>
-          <input v-model.number="filters.topicId" placeholder="课题编号" />
+          <span>课题名称</span>
+          <input v-model="filters.topicName" placeholder="课题名称" />
         </label>
         <label class="field">
           <span>学生 ID</span>
           <input v-model="filters.studentId" placeholder="学号" />
+        </label>
+        <label class="field">
+          <span>状态</span>
+          <select v-model="filters.status">
+            <option value="">全部</option>
+            <option value="已提交">已提交</option>
+            <option value="评审中">评审中</option>
+            <option value="已通过">已通过</option>
+            <option value="未通过">未通过</option>
+          </select>
         </label>
         <button class="primary" @click="load">查询</button>
       </div>
@@ -29,6 +39,7 @@
           <tr>
             <th>ID</th>
             <th>课题ID</th>
+            <th>课题名称</th>
             <th>学生ID</th>
             <th>标题</th>
             <th>状态</th>
@@ -39,6 +50,7 @@
           <tr v-for="item in filteredItems" :key="item.tp_id">
             <td>{{ item.tp_id }}</td>
             <td>{{ item.topic_Topic_id }}</td>
+            <td>{{ item.topic_name }}</td>
             <td>{{ item.student_Stu_id }}</td>
             <td>{{ item.tp_title }}</td>
             <td>{{ item.tp_status }}</td>
@@ -60,35 +72,44 @@ import api from '../api';
 
 const items = ref([]);
 const filters = ref({
-  topicId: null,
-  studentId: ''
+  topicName: '',
+  studentId: '',
+  status: ''
 });
 const topicIds = ref([]);
 const router = useRouter();
 const load = async () => {
-  const [proposals, applications] = await Promise.all([
+  const [proposals, applications, topics] = await Promise.all([
     api.get('/thesis-proposals'),
-    api.get('/topic-applications')
+    api.get('/topic-applications'),
+    api.get('/topics')
   ]);
   const appRows = applications.data.data || [];
   const appMap = new Map();
   appRows.forEach((row) => {
     appMap.set(row.application_id, row);
   });
+  const topicRows = topics.data.data || [];
+  const topicMap = new Map();
+  topicRows.forEach((row) => {
+    topicMap.set(row.topic_id, row.topic_name);
+  });
   const filtered = (proposals.data.data || []).map((row) => {
     const app = appMap.get(row.topic_selection_application_id);
     return {
       ...row,
       topic_Topic_id: app?.topic_Topic_id,
-      student_Stu_id: app?.student_Stu_id
+      student_Stu_id: app?.student_Stu_id,
+      topic_name: topicMap.get(app?.topic_Topic_id) || ''
     };
   }).filter((row) => topicIds.value.includes(row.topic_Topic_id));
   items.value = filtered;
 };
 
 const filteredItems = computed(() => items.value.filter((row) => {
-  if (filters.value.topicId && row.topic_Topic_id !== filters.value.topicId) return false;
+  if (filters.value.topicName && !row.topic_name.includes(filters.value.topicName)) return false;
   if (filters.value.studentId && row.student_Stu_id !== filters.value.studentId) return false;
+  if (filters.value.status && row.tp_status !== filters.value.status) return false;
   return true;
 }));
 
@@ -177,6 +198,13 @@ input {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 13px;
+}
+select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #ffffff;
 }
 button {
   padding: 8px 12px;

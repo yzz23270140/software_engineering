@@ -94,6 +94,19 @@
         <h3>通知列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>通知类型</span>
+          <select v-model="noticeFilters.type">
+            <option value="">全部</option>
+            <option v-for="item in noticeTypes" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>发布时间</span>
+          <input v-model="noticeFilters.date" type="date" />
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -107,7 +120,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.notice_id">
+          <tr v-for="item in filteredNotices" :key="item.notice_id">
             <td>{{ item.notice_id }}</td>
             <td>{{ item.notice_title }}</td>
             <td>{{ item.notice_type }}</td>
@@ -140,6 +153,10 @@ const form = ref({
   notice_type: '系统通知',
   notice_title: '',
   notice_content: ''
+});
+const noticeFilters = ref({
+  type: '',
+  date: ''
 });
 const filters = ref({
   college: '',
@@ -239,6 +256,25 @@ const formatTime = (value) => {
   if (!value) return '';
   return String(value).replace('T', ' ').replace('Z', '');
 };
+
+const noticeTypes = computed(() => {
+  const set = new Set();
+  items.value.forEach((item) => {
+    if (item.notice_type) set.add(item.notice_type);
+  });
+  return Array.from(set);
+});
+
+const filteredNotices = computed(() => {
+  return items.value.filter((item) => {
+    if (noticeFilters.value.type && item.notice_type !== noticeFilters.value.type) return false;
+    if (noticeFilters.value.date) {
+      const dateStr = formatTime(item.notice_time).slice(0, 10);
+      if (dateStr !== noticeFilters.value.date) return false;
+    }
+    return true;
+  });
+});
 
 watch(filteredStudents, (list) => {
   const visibleIds = new Set(list.map((row) => row.stu_id));

@@ -70,6 +70,26 @@
         <h3>初稿列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>课题</span>
+          <input v-model="filters.topicName" placeholder="课题名称" />
+        </label>
+        <label class="field">
+          <span>学生</span>
+          <input v-model="filters.studentName" placeholder="学生姓名/学号" />
+        </label>
+        <label class="field">
+          <span>状态</span>
+          <select v-model="filters.status">
+            <option value="">全部</option>
+            <option value="已提交">已提交</option>
+            <option value="评审中">评审中</option>
+            <option value="已通过">已通过</option>
+            <option value="未通过">未通过</option>
+          </select>
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -85,7 +105,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.paper_id">
+          <tr v-for="item in filteredItems" :key="item.paper_id">
             <td>{{ item.paper_id }}</td>
             <td>{{ item.topic_name }}</td>
             <td>{{ item.student_name }}</td>
@@ -123,12 +143,17 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import RolePill from '../components/RolePill.vue';
 import api from '../api';
 
 const items = ref([]);
 const paperOptions = ref([]);
+const filters = ref({
+  topicName: '',
+  studentName: '',
+  status: ''
+});
 const form = ref({
   paper_id: '',
   content_note: '',
@@ -203,6 +228,17 @@ const load = async () => {
     form.value.paper_id = paperOptions.value[0].paper_id;
   }
 };
+
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (filters.value.topicName && !row.topic_name.includes(filters.value.topicName)) return false;
+  if (filters.value.studentName) {
+    if (!row.student_name.includes(filters.value.studentName) && !row.student_name.includes(`（${filters.value.studentName}`)) {
+      return false;
+    }
+  }
+  if (filters.value.status && row.paper_status !== filters.value.status) return false;
+  return true;
+}));
 
 const submitReview = async () => {
   if (!form.value.paper_id || !form.value.status) {

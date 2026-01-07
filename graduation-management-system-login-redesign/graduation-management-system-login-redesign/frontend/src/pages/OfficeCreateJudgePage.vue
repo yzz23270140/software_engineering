@@ -13,6 +13,8 @@
         <h3>新增评委</h3>
         <button class="ghost" @click="resetForm">清空未创建</button>
       </div>
+      <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="success" class="success">{{ success }}</div>
       <div class="form-grid">
         <label class="field">
           <span>评委 ID</span>
@@ -42,6 +44,27 @@
         <h3>评委列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>ID</span>
+          <input v-model="listFilters.id" placeholder="评委ID" />
+        </label>
+        <label class="field">
+          <span>姓名</span>
+          <input v-model="listFilters.name" placeholder="姓名" />
+        </label>
+        <label class="field">
+          <span>评审组</span>
+          <select v-model="listFilters.group">
+            <option value="">全部</option>
+            <option value="审题组">审题组</option>
+            <option value="开题评审组">开题评审组</option>
+            <option value="中期检查小组">中期检查小组</option>
+            <option value="论文二审组">论文二审组</option>
+            <option value="毕设评委组">毕设评委组</option>
+          </select>
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -52,7 +75,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.jud_id">
+          <tr v-for="item in filteredItems" :key="item.jud_id">
             <td>{{ item.jud_id }}</td>
             <td>{{ item.jud_name }}</td>
             <td>{{ item.jud_group }}</td>
@@ -67,15 +90,29 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import api from '../api';
 
 const items = ref([]);
+const error = ref('');
+const success = ref('');
+const listFilters = ref({
+  id: '',
+  name: '',
+  group: ''
+});
 const form = ref({
   jud_id: '',
   jud_name: '',
   jud_group: ''
 });
+
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (listFilters.value.id && row.jud_id !== listFilters.value.id) return false;
+  if (listFilters.value.name && !row.jud_name.includes(listFilters.value.name)) return false;
+  if (listFilters.value.group && row.jud_group !== listFilters.value.group) return false;
+  return true;
+}));
 
 const load = async () => {
   const { data } = await api.get('/judges');
@@ -83,8 +120,43 @@ const load = async () => {
 };
 
 const createItem = async () => {
-  await api.post('/judges', form.value);
-  await load();
+  error.value = '';
+  success.value = '';
+  const judId = String(form.value.jud_id || '').trim();
+  if (!judId) {
+    error.value = '评委ID不能为空';
+    return;
+  }
+  if (!/^J[1-5]\d{5}$/.test(judId)) {
+    error.value = '评委ID格式错误，应为J+组别编号+5位数字';
+    return;
+  }
+  if (!form.value.jud_group) {
+    error.value = '评审组不能为空';
+    return;
+  }
+  const groupCodeMap = {
+    '审题组': '1',
+    '开题评审组': '2',
+    '中期检查小组': '3',
+    '论文二审组': '4',
+    '毕设评委组': '5'
+  };
+  if (groupCodeMap[form.value.jud_group] !== judId.substring(1, 2)) {
+    error.value = '评委ID组别编号与评审组不匹配';
+    return;
+  }
+  try {
+    const { data } = await api.post('/judges', form.value);
+    if (!data.success) {
+      error.value = data.message || '创建失败';
+      return;
+    }
+    await load();
+    success.value = '创建成功';
+  } catch (err) {
+    error.value = '创建失败，请稍后重试。';
+  }
 };
 
 const resetForm = () => {
@@ -93,14 +165,26 @@ const resetForm = () => {
     jud_name: '',
     jud_group: ''
   };
+  error.value = '';
+  success.value = '';
 };
 
 const removeItem = async (id) => {
   if (!confirm('确认删除该评委吗？')) {
     return;
   }
-  await api.delete(`/judges/${id}`);
-  await load();
+  error.value = '';
+  success.value = '';
+  try {
+    const { data } = await api.delete(`/judges/${id}`);
+    if (!data.success) {
+      error.value = data.message || '删除失败';
+      return;
+    }
+    await load();
+  } catch (err) {
+    error.value = '删除失败，请稍后重试。';
+  }
 };
 
 onMounted(load);
@@ -163,6 +247,16 @@ onMounted(load);
   gap: 6px;
   font-size: 13px;
   color: #1f2937;
+}
+.error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.success {
+  color: #16a34a;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 input {
   padding: 8px 10px;

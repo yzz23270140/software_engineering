@@ -10,8 +10,8 @@
 
     <div class="panel">
       <div class="panel-head">
-        <h3>查询条件</h3>
-        <button class="ghost" @click="load">刷新列表</button>
+        <h3>选题申请列表</h3>
+        <button class="ghost" @click="load">刷新</button>
       </div>
       <div class="form-grid">
         <label class="field">
@@ -19,38 +19,47 @@
           <input v-model="filters.studentId" placeholder="学号" />
         </label>
         <label class="field">
-          <span>课题 ID</span>
-          <input v-model.number="filters.topicId" placeholder="课题编号" />
+          <span>学生姓名</span>
+          <input v-model="filters.studentName" placeholder="姓名" />
+        </label>
+        <label class="field">
+          <span>课题名称</span>
+          <input v-model="filters.topicName" placeholder="课题名称" />
+        </label>
+        <label class="field">
+          <span>志愿顺序</span>
+          <input v-model.number="filters.order" placeholder="1/2/3" />
         </label>
         <label class="field">
           <span>状态</span>
-          <input v-model="filters.status" placeholder="未审核/审核通过" />
+          <select v-model="filters.status">
+            <option value="">全部</option>
+            <option value="未审核">未审核</option>
+            <option value="审核通过">审核通过</option>
+            <option value="审核不通过">审核不通过</option>
+          </select>
         </label>
-        <button class="primary" @click="load">查询</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head">
-        <h3>选题申请列表</h3>
-        <button class="ghost" @click="load">刷新</button>
       </div>
       <table class="table">
         <thead>
           <tr>
             <th>ID</th>
             <th>学生</th>
+            <th>学生姓名</th>
             <th>课题</th>
+            <th>课题名称</th>
             <th>志愿顺序</th>
             <th>状态</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.application_id">
+          <tr v-for="item in filteredItems" :key="item.application_id">
             <td>{{ item.application_id }}</td>
             <td>{{ item.student_Stu_id }}</td>
+            <td>{{ item.student_name }}</td>
             <td>{{ item.topic_Topic_id }}</td>
+            <td>{{ item.topic_name }}</td>
             <td>{{ item.tsa_order_for_topic }}</td>
             <td>{{ item.tsa_status }}</td>
             <td>
@@ -65,36 +74,49 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import RolePill from '../components/RolePill.vue';
 import api from '../api';
 
 const items = ref([]);
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (filters.value.studentId && row.student_Stu_id !== filters.value.studentId) return false;
+  if (filters.value.studentName && !row.student_name.includes(filters.value.studentName)) return false;
+  if (filters.value.topicName && !row.topic_name.includes(filters.value.topicName)) return false;
+  if (filters.value.order && Number(row.tsa_order_for_topic) !== Number(filters.value.order)) return false;
+  if (filters.value.status && row.tsa_status !== filters.value.status) return false;
+  return true;
+}));
 const teacherTopicIds = ref([]);
 const filters = ref({
   studentId: '',
-  topicId: null,
+  studentName: '',
+  topicName: '',
+  order: null,
   status: ''
 });
 
 const load = async () => {
-  const params = {};
-  if (filters.value.studentId) {
-    params.studentId = filters.value.studentId;
-  }
-  if (filters.value.topicId) {
-    params.topicId = filters.value.topicId;
-  }
-  if (filters.value.status) {
-    params.status = filters.value.status;
-  }
-  const { data } = await api.get('/topic-applications', { params });
-  const list = data.data || [];
-  if (teacherTopicIds.value.length > 0) {
-    items.value = list.filter((row) => teacherTopicIds.value.includes(row.topic_Topic_id));
-  } else {
-    items.value = list;
-  }
+  const [appRes, topicRes, studentRes] = await Promise.all([
+    api.get('/topic-applications'),
+    api.get('/topics'),
+    api.get('/students')
+  ]);
+  const list = appRes.data.data || [];
+  const topics = topicRes.data.data || [];
+  const students = studentRes.data.data || [];
+  const topicMap = new Map();
+  topics.forEach((row) => topicMap.set(row.topic_id, row.topic_name));
+  const studentMap = new Map();
+  students.forEach((row) => studentMap.set(row.stu_id, row.stu_name));
+  const filtered = teacherTopicIds.value.length > 0
+    ? list.filter((row) => teacherTopicIds.value.includes(row.topic_Topic_id))
+    : list;
+  items.value = filtered.map((row) => ({
+    ...row,
+    topic_name: topicMap.get(row.topic_Topic_id) || '',
+    student_name: studentMap.get(row.student_Stu_id) || ''
+  }));
 };
 
 const loadTeacherTopics = async () => {
@@ -120,9 +142,9 @@ const updateStatus = async (id, status) => {
   await load();
 };
 
-onMounted(() => {
-  loadTeacherTopics();
-  load();
+onMounted(async () => {
+  await loadTeacherTopics();
+  await load();
 });
 </script>
 
@@ -189,6 +211,13 @@ input {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 13px;
+}
+select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #ffffff;
 }
 button {
   padding: 8px 12px;

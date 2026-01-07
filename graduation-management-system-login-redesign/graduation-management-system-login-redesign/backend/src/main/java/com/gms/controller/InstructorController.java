@@ -29,13 +29,20 @@ public class InstructorController {
     @PostMapping
     public ApiResponse<String> create(@RequestBody Instructor item) {
         try {
+            if (item.getIns_id() == null || item.getIns_id().trim().isEmpty()) {
+                return ApiResponse.error("辅导员ID不能为空");
+            }
+            String insId = item.getIns_id().trim();
+            if (!insId.matches("^I\\d{6}$")) {
+                return ApiResponse.error("辅导员ID格式错误，应为I开头+6位数字");
+            }
             if (item.getIns_id() != null && mapper.selectById(item.getIns_id()) != null) {
                 return ApiResponse.error("辅导员ID已存在");
             }
             mapper.insert(item);
             return ApiResponse.ok(item.getIns_id());
         } catch (Exception ex) {
-            return ApiResponse.error("创建辅导员失败，请检查数据是否完整。");
+            return ApiResponse.error("创建辅导员失败：" + ex.getMessage());
         }
     }
 

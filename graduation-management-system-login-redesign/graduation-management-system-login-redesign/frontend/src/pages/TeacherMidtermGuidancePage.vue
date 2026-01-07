@@ -58,6 +58,35 @@
         <h3>指导记录列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>课题</span>
+          <input v-model="filters.topicName" placeholder="课题名称" />
+        </label>
+        <label class="field">
+          <span>学生</span>
+          <input v-model="filters.studentName" placeholder="学生姓名/学号" />
+        </label>
+        <label class="field">
+          <span>方式</span>
+          <select v-model="filters.method">
+            <option value="">全部</option>
+            <option value="面谈">面谈</option>
+            <option value="线上会议">线上会议</option>
+            <option value="邮件">邮件</option>
+            <option value="电话">电话</option>
+            <option value="其他">其他</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>确认状态</span>
+          <select v-model="filters.confirm">
+            <option value="">全部</option>
+            <option value="已确认">已确认</option>
+            <option value="未确认">未确认</option>
+          </select>
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -71,7 +100,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.gr_id">
+          <tr v-for="item in filteredItems" :key="item.gr_id">
             <td>{{ item.gr_id }}</td>
             <td>{{ item.topic_name }}</td>
             <td>{{ item.student_name }}</td>
@@ -89,12 +118,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import RolePill from '../components/RolePill.vue';
 import api from '../api';
 
 const items = ref([]);
 const thesisOptions = ref([]);
+const filters = ref({
+  topicName: '',
+  studentName: '',
+  method: '',
+  confirm: ''
+});
 const form = ref({
   thesis_proposal_Tp_id: '',
   gr_time: '',
@@ -167,6 +202,18 @@ const load = async () => {
       };
     });
 };
+
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (filters.value.topicName && !row.topic_name.includes(filters.value.topicName)) return false;
+  if (filters.value.studentName) {
+    if (!row.student_name.includes(filters.value.studentName) && !row.student_name.includes(`（${filters.value.studentName}`)) {
+      return false;
+    }
+  }
+  if (filters.value.method && row.gr_method !== filters.value.method) return false;
+  if (filters.value.confirm && row.gr_confirm !== filters.value.confirm) return false;
+  return true;
+}));
 
 const createItem = async () => {
   if (!form.value.thesis_proposal_Tp_id || !form.value.gr_record) {

@@ -41,6 +41,15 @@ public class TopicController {
             if (topic.getTeacher_Tea_id() == null || topic.getTeacher_Tea_id().isEmpty()) {
                 return ApiResponse.error("教师ID为空，请重新登录");
             }
+            if (topic.getTopic_name() == null || topic.getTopic_name().trim().isEmpty()) {
+                return ApiResponse.error("课题名称不能为空");
+            }
+            QueryWrapper<Topic> nameQw = new QueryWrapper<>();
+            nameQw.eq("Topic_name", topic.getTopic_name().trim());
+            Topic existing = topicMapper.selectOne(nameQw);
+            if (existing != null) {
+                return ApiResponse.error("课题名称已存在，课题ID：" + existing.getTopic_id());
+            }
             topicMapper.insert(topic);
             return ApiResponse.ok(topic.getTopic_id());
         } catch (Exception ex) {

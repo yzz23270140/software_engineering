@@ -14,6 +14,7 @@
         <button class="ghost" @click="resetForm">清空未创建</button>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="success" class="success">{{ success }}</div>
       <div class="form-grid">
         <label class="field">
           <span>学号</span>
@@ -83,6 +84,28 @@
         <h3>学生列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>学号</span>
+          <input v-model="listFilters.id" placeholder="学号" />
+        </label>
+        <label class="field">
+          <span>姓名</span>
+          <input v-model="listFilters.name" placeholder="姓名" />
+        </label>
+        <label class="field">
+          <span>学院</span>
+          <select v-model="listFilters.college">
+            <option value="">全部</option>
+            <option value="计算机学院">计算机学院</option>
+            <option value="卓越学院">卓越学院</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>专业</span>
+          <input v-model="listFilters.major" placeholder="专业" />
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -94,7 +117,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in items" :key="item.stu_id">
+          <tr v-for="item in filteredItems" :key="item.stu_id">
             <td>{{ item.stu_id }}</td>
             <td>{{ item.stu_name }}</td>
             <td>{{ item.stu_college }}</td>
@@ -117,6 +140,7 @@ const items = ref([]);
 const instructors = ref([]);
 const teachers = ref([]);
 const error = ref('');
+const success = ref('');
 const form = ref({
   stu_id: '',
   stu_name: '',
@@ -125,6 +149,12 @@ const form = ref({
   enrollment_year: 2024,
   instructor_Ins_id: '',
   teacher_Tea_id: ''
+});
+const listFilters = ref({
+  id: '',
+  name: '',
+  college: '',
+  major: ''
 });
 
 const filteredInstructors = computed(() =>
@@ -137,6 +167,14 @@ const majorsByCollege = {
 };
 
 const filteredMajors = computed(() => majorsByCollege[form.value.stu_college] || []);
+
+const filteredItems = computed(() => items.value.filter((row) => {
+  if (listFilters.value.id && row.stu_id !== listFilters.value.id) return false;
+  if (listFilters.value.name && !row.stu_name.includes(listFilters.value.name)) return false;
+  if (listFilters.value.college && row.stu_college !== listFilters.value.college) return false;
+  if (listFilters.value.major && !row.stu_major.includes(listFilters.value.major)) return false;
+  return true;
+}));
 
 const load = async () => {
   const { data } = await api.get('/students');
@@ -155,6 +193,29 @@ const loadTeachers = async () => {
 
 const createItem = async () => {
   error.value = '';
+  success.value = '';
+  const stuId = String(form.value.stu_id || '').trim();
+  if (!stuId) {
+    error.value = '学生ID不能为空';
+    return;
+  }
+  if (stuId.length !== 12) {
+    error.value = '学生ID长度必须为12位';
+    return;
+  }
+  if (!/^S\d{11}$/.test(stuId)) {
+    error.value = '学生ID格式错误，应为S开头+11位数字';
+    return;
+  }
+  const yearStr = stuId.substring(1, 5);
+  if (!/^\d{4}$/.test(yearStr)) {
+    error.value = '学生ID年份格式错误';
+    return;
+  }
+  if (String(form.value.enrollment_year || '') !== yearStr) {
+    error.value = '年份不匹配';
+    return;
+  }
   try {
     const { data } = await api.post('/students', form.value);
     if (!data.success) {
@@ -162,6 +223,7 @@ const createItem = async () => {
       return;
     }
     await load();
+    success.value = '创建成功';
   } catch (err) {
     error.value = '创建失败，请检查辅导员/指导教师ID是否存在。';
   }
@@ -178,6 +240,7 @@ const resetForm = () => {
     teacher_Tea_id: ''
   };
   error.value = '';
+  success.value = '';
 };
 
 const removeItem = async (id) => {
@@ -185,6 +248,7 @@ const removeItem = async (id) => {
     return;
   }
   error.value = '';
+  success.value = '';
   try {
     const { data } = await api.delete(`/students/${id}`);
     if (!data.success) {
@@ -318,6 +382,11 @@ button {
 .error {
   margin-top: 12px;
   color: #dc2626;
+  font-size: 13px;
+}
+.success {
+  margin-top: 12px;
+  color: #16a34a;
   font-size: 13px;
 }
 </style>

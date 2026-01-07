@@ -12,6 +12,15 @@
         <h3>通知列表</h3>
         <button class="ghost" @click="load">刷新</button>
       </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>通知类型</span>
+          <select v-model="filterType">
+            <option value="">全部</option>
+            <option v-for="item in typeOptions" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -23,7 +32,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in filteredItems" :key="item.notice_id">
+          <tr v-for="item in displayItems" :key="item.notice_id">
             <td>{{ item.notice_id }}</td>
             <td>{{ item.notice_title }}</td>
             <td>{{ item.notice_type }}</td>
@@ -37,11 +46,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import api from '../api';
 
 const items = ref([]);
 const filteredItems = ref([]);
+const displayItems = ref([]);
+const filterType = ref('');
 const studentInfo = ref(null);
 const currentRole = ref('');
 const currentId = ref('');
@@ -74,6 +85,22 @@ const load = async () => {
   } else {
     filteredItems.value = items.value;
   }
+  applyFilters();
+};
+
+const typeOptions = computed(() => {
+  const set = new Set();
+  filteredItems.value.forEach((item) => {
+    if (item.notice_type) set.add(item.notice_type);
+  });
+  return Array.from(set);
+});
+
+const applyFilters = () => {
+  displayItems.value = filteredItems.value.filter((item) => {
+    if (filterType.value && item.notice_type !== filterType.value) return false;
+    return true;
+  });
 };
 
 const matchNotice = (notice, student) => {
@@ -128,6 +155,10 @@ onMounted(async () => {
   await loadStudentInfo();
   await load();
 });
+
+watch([filterType, filteredItems], () => {
+  applyFilters();
+}, { deep: true });
 </script>
 
 <style scoped>
@@ -162,6 +193,25 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.form-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #1f2937;
+}
+select {
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #ffffff;
 }
 .panel-head h3 {
   margin: 0;

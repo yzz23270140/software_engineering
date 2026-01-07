@@ -29,13 +29,20 @@ public class TeacherController {
     @PostMapping
     public ApiResponse<String> create(@RequestBody Teacher item) {
         try {
+            if (item.getTea_id() == null || item.getTea_id().trim().isEmpty()) {
+                return ApiResponse.error("教师ID不能为空");
+            }
+            String teaId = item.getTea_id().trim();
+            if (!teaId.matches("^T\\d{6}$")) {
+                return ApiResponse.error("教师ID格式错误，应为T开头+6位数字");
+            }
             if (item.getTea_id() != null && mapper.selectById(item.getTea_id()) != null) {
                 return ApiResponse.error("教师ID已存在");
             }
             mapper.insert(item);
             return ApiResponse.ok(item.getTea_id());
         } catch (Exception ex) {
-            return ApiResponse.error("创建教师失败，请检查数据是否完整。");
+            return ApiResponse.error("创建教师失败：" + ex.getMessage());
         }
     }
 

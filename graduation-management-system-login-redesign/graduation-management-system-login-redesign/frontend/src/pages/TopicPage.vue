@@ -18,7 +18,7 @@
           <span>课题选择</span>
           <select v-model.number="selectionForm.topic_Topic_id">
             <option disabled value="">请选择课题</option>
-            <option v-for="item in items" :key="item.topic_id" :value="item.topic_id">
+            <option v-for="item in filteredItems" :key="item.topic_id" :value="item.topic_id">
               {{ item.topic_name }}（{{ item.topic_id }}）
             </option>
           </select>
@@ -70,7 +70,43 @@
     <div class="panel">
       <div class="panel-head">
         <h3>已发布课题</h3>
-        <button class="ghost" @click="load">刷新</button>
+        <div class="actions">
+          <button class="ghost" @click="toggleMajorOnly">
+            {{ showMajorOnly ? '显示全部课题' : '仅显示本专业' }}
+          </button>
+          <button class="ghost" @click="load">刷新</button>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>课题类型</span>
+          <select v-model="filters.type">
+            <option value="">全部</option>
+            <option value="教师自拟">教师自拟</option>
+            <option value="科研项目">科研项目</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>专业</span>
+          <select v-model="filters.major">
+            <option value="">全部</option>
+            <option v-for="item in majorOptions" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>学年</span>
+          <select v-model="filters.academicYear">
+            <option value="">全部</option>
+            <option v-for="item in yearOptions" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>教师姓名</span>
+          <select v-model="filters.teacherName">
+            <option value="">全部</option>
+            <option v-for="item in teacherOptions" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
       </div>
       <table class="table">
         <thead>
@@ -79,16 +115,18 @@
             <th>课题名称</th>
             <th>课题描述</th>
             <th>所属专业</th>
+            <th>类型</th>
             <th>学年</th>
             <th>教师姓名</th>
           </tr>
         </thead>
         <tbody>
-        <tr v-for="item in items" :key="item.topic_id">
+        <tr v-for="item in displayItems" :key="item.topic_id">
           <td>{{ item.topic_id }}</td>
           <td>{{ item.topic_name }}</td>
           <td>{{ item.topic_description }}</td>
           <td>{{ formatMajor(item.topic_major) }}</td>
+          <td>{{ item.topic_type }}</td>
           <td>{{ item.academic_year }}</td>
           <td>{{ teacherNameMap[item.teacher_Tea_id] || '' }}</td>
         </tr>
@@ -99,13 +137,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import RolePill from '../components/RolePill.vue';
 import api from '../api';
 
 const items = ref([]);
+const filteredItems = ref([]);
+const displayItems = ref([]);
 const applications = ref([]);
 const teacherNameMap = ref({});
+const studentMajor = ref('');
+const studentId = ref('');
+const showMajorOnly = ref(false);
+const filters = ref({
+  type: '',
+  major: '',
+  teacherName: '',
+  academicYear: ''
+});
 const selectionForm = ref({
   student_Stu_id: '',
   topic_Topic_id: null,
@@ -113,14 +162,37 @@ const selectionForm = ref({
   tsa_status: '未审核'
 });
 
+const majorOptions = computed(() => {
+  const set = new Set();
+  items.value.forEach((item) => {
+    const majors = parseMajor(item.topic_major);
+    majors.forEach((m) => set.add(m));
+  });
+  return Array.from(set);
+});
+
+const yearOptions = computed(() => {
+  const set = new Set();
+  items.value.forEach((item) => {
+    if (item.academic_year) set.add(item.academic_year);
+  });
+  return Array.from(set);
+});
+
+const teacherOptions = computed(() => {
+  const set = new Set();
+  Object.values(teacherNameMap.value || {}).forEach((name) => {
+    if (name) set.add(name);
+  });
+  return Array.from(set);
+});
+
 const load = async () => {
   const { data } = await api.get('/topics', {
     params: { status: '已发布' }
   });
   items.value = data.data || [];
-  if (!selectionForm.value.topic_Topic_id && items.value.length > 0) {
-    selectionForm.value.topic_Topic_id = items.value[0].topic_id;
-  }
+  applyFilters();
 };
 
 const loadApplications = async () => {
@@ -165,16 +237,7 @@ const loadTeachers = async () => {
 };
 
 const formatMajor = (value) => {
-  if (!value) return '';
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.join('、');
-    }
-  } catch (err) {
-    return value;
-  }
-  return value;
+  return parseMajor(value).join('、');
 };
 
 const createSelection = async () => {
@@ -187,9 +250,9 @@ const createSelection = async () => {
       alert('请选择课题后再提交。');
       return;
     }
-    const exists = items.value.some((item) => item.topic_id === selectionForm.value.topic_Topic_id);
+    const exists = filteredItems.value.some((item) => item.topic_id === selectionForm.value.topic_Topic_id);
     if (!exists) {
-      alert('所选课题不存在或未发布。');
+      alert('所选课题不存在、未发布或不符合专业。');
       return;
     }
     const { data } = await api.post('/topic-applications', {
@@ -211,17 +274,94 @@ const setStudentId = () => {
   try {
     const stored = JSON.parse(localStorage.getItem('gms_user'));
     selectionForm.value.student_Stu_id = stored?.username || '';
+    studentId.value = stored?.username || '';
   } catch (err) {
     selectionForm.value.student_Stu_id = '';
+    studentId.value = '';
+  }
+};
+
+const loadStudentProfile = async () => {
+  if (!studentId.value) {
+    studentMajor.value = '';
+    return;
+  }
+  const { data } = await api.get('/students');
+  const found = (data.data || []).find((row) => row.stu_id === studentId.value);
+  studentMajor.value = found?.stu_major || '';
+};
+
+const hasMajor = (value, major) => {
+  if (!major) return true;
+  return parseMajor(value).includes(major);
+};
+
+const parseMajor = (value) => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (err) {
+    // ignore
+  }
+  return String(value).split(/[、,]/).map((item) => item.trim()).filter(Boolean);
+};
+
+const applyFilters = () => {
+  filteredItems.value = items.value.filter((item) => {
+    if (studentMajor.value && !hasMajor(item.topic_major, studentMajor.value)) {
+      return false;
+    }
+    return true;
+  });
+  displayItems.value = items.value.filter((item) => {
+    if (filters.value.type && item.topic_type !== filters.value.type) {
+      return false;
+    }
+    if (filters.value.major && !hasMajor(item.topic_major, filters.value.major)) {
+      return false;
+    }
+    if (filters.value.academicYear && item.academic_year !== filters.value.academicYear) {
+      return false;
+    }
+    if (filters.value.teacherName) {
+      const teacherName = teacherNameMap.value[item.teacher_Tea_id] || '';
+      if (teacherName !== filters.value.teacherName) return false;
+    }
+    if (showMajorOnly.value && studentMajor.value && !hasMajor(item.topic_major, studentMajor.value)) {
+      return false;
+    }
+    return true;
+  });
+  if (!filteredItems.value.find((item) => item.topic_id === selectionForm.value.topic_Topic_id)) {
+    selectionForm.value.topic_Topic_id = filteredItems.value[0]?.topic_id || null;
   }
 };
 
 onMounted(() => {
   setStudentId();
-  load();
+  loadStudentProfile().then(load);
   loadApplications();
   loadTeachers();
 });
+
+watch([filters, teacherNameMap], () => {
+  applyFilters();
+}, { deep: true });
+
+watch([showMajorOnly, studentMajor], () => {
+  applyFilters();
+});
+
+watch([showMajorOnly, studentMajor], () => {
+  applyFilters();
+});
+
+const toggleMajorOnly = () => {
+  showMajorOnly.value = !showMajorOnly.value;
+};
 </script>
 
 <style scoped>
@@ -265,6 +405,10 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
 }
 .panel-head h3 {
   margin: 0;
